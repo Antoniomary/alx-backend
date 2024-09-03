@@ -32,7 +32,6 @@ class LRUCache(BaseCaching):
             del self.cache_data[lru]
             print(f'DISCARD: {lru}')
 
-
     def get(self, key):
         """returns the value in self.cache_data linked to key
            or None if the key is None or does not exist
