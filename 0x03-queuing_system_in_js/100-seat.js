@@ -39,8 +39,8 @@ app.get('/reserve_seat', (req, res) => {
   if (!reservationEnabled) return res.json({ status: 'Reservation are blocked' });
 
   const job = queue.create('reserve_seat').save((err) => {
-    if (!err) res.json({ status: 'Reservation in process' });
-    else res.json({ status: 'Reservation failed' });
+    if (!err) return res.json({ status: 'Reservation in process' });
+    else return res.json({ status: 'Reservation failed' });
   });
 
   job.on('complete', () => {
@@ -52,24 +52,22 @@ app.get('/reserve_seat', (req, res) => {
 });
 
 app.get('/process', (req, res) => {
-  res.json({ status: 'Queue processing' });
-
   queue.process('reserve_seat', async (job, done) => {
-    const currentSeats = await getCurrentAvailableSeats();
+    let currentSeats = await getCurrentAvailableSeats();
 
-    if (currentSeats <= 0) {
-      reservationEnabled = false;
-      return done(new Error('Not enough seats available'));
+    if (currentSeats) {
+      await reserveSeat(currentSeats - 1);
+      currentSeats -= 1;
     }
 
-    await reserveSeat(currentSeats - 1);
-
-    if (currentSeats - 1 <= 0) {
-      reservationEnabled = false;
-    }
+    if (currentSeats === 0) reservationEnabled = false;
+    else if (currentSeats >= 0) reservationEnabled = true;
+    else return done(new Error('Not enough seats available'));
 
     done();
   });
+
+  return res.json({ status: 'Queue processing' });
 });
 
 app.listen(1245, () => {
