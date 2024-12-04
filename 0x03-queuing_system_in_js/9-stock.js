@@ -1,5 +1,5 @@
 import express from 'express';
-import createClient from 'redis';
+import { createClient } from 'redis';
 import { promisify } from 'util';
 
 const app = express();
@@ -38,26 +38,33 @@ client.on('connect', () => {
   console.log(`Failed to connect to Redis server: ${err}`);
 });
 
-const getAsync = promisify(client.get).bind(client);
-const setAsync = promisify(client.set).bind(client);
 
-async function reserveStockById(itemId, stock) {
-  await setAsync(`item.${itemId}`, stock);
+function reserveStockById(itemId, stock) {
+  client.set(`item.${itemId}`, stock);
 }
+
+const getAsync = promisify(client.get).bind(client);
 
 async function getCurrentReservedStockById(itemId) {
-  const stock = await getAsync(`item.${itemId}`);
-  return stock ? parseInt(stock, 10) : null;
+
+  try {
+    const stock = await getAsync(`item.${itemId}`);
+    if (stock) return parseInt(stock, 10);
+  } catch(err) {
+    console.log(err);
+  }
+
+  return null;
 }
 
-app.get('/list_products/:itemId', (req, res) => {
+app.get('/list_products/:itemId', async (req, res) => {
   const itemId = parseInt(req.params.itemId, 10);
   const item = getItemById(itemId);
 
   if (!item) return res.json({ 'status': 'Product not found' });
 
   const reservedStock = await getCurrentReservedStockById(itemId);
-  const currentQuantity = reservedStock !== null ? reserveStock : item.stock;
+  const currentQuantity = reservedStock !== null ? reservedStock : item.stock;
 
   return res.json({
     itemId: item.Id,
@@ -68,14 +75,14 @@ app.get('/list_products/:itemId', (req, res) => {
   });
 });
 
-app.get('/reserve_product/:itemId', (req, res) => {
+app.get('/reserve_product/:itemId', async (req, res) => {
   const itemId = parseInt(req.params.itemId, 10);
   const item = getItemById(itemId);
 
   if (!item) return res.json({ 'status': 'Product not found' });
 
   const reservedStock = await getCurrentReservedStockById(itemId);
-  const currentQuantity = reservedStock !== null ? reserveStock : item.stock;
+  const currentQuantity = reservedStock !== null ? reservedStock : item.stock;
 
   if (currentQuantity < 1) {
     return res.json({
@@ -84,7 +91,7 @@ app.get('/reserve_product/:itemId', (req, res) => {
     });
   }
 
-  await reserveStockById(itemId, currentQuantity - 1);
+  reserveStockById(itemId, currentQuantity - 1);
 
   return res.json({
     'status': 'Reservation confirmed',
@@ -92,6 +99,4 @@ app.get('/reserve_product/:itemId', (req, res) => {
   });
 });
 
-app.listen(1245, () => {
-  console.log('Server is running');
-});
+app.listen(1245, () => console.log('Server is running'));
